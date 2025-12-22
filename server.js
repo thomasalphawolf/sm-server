@@ -1,96 +1,99 @@
-const express = require('express')
-const app = express()
-const port = process.env.PORT || 3000
+const express = require("express");
+const app = express();
+const PORT = process.env.PORT || 3000;
 
-app.use(express.json())
+app.use(express.json());
 
-/* -------------------------
-   STATE
-------------------------- */
+// =====================
+// STATE
+// =====================
+const state = {
+  LX: {
+    currentCue: 0,
+    nextCue: 1,
+    action: "NONE"
+  },
+  AUTOMATION: {
+    currentCue: 0,
+    nextCue: 1,
+    action: "NONE"
+  }
+};
 
-let cues = {
-    LX: 0,
-    Automation: 0
+let selectedDept = "LX";
+
+// =====================
+// HELPERS
+// =====================
+function clearAction(dept) {
+  state[dept].action = "NONE";
 }
 
-let currentAction = {
-    LX: "STANDBY",
-    Automation: "STANDBY"
-}
+// =====================
+// ROUTES
+// =====================
 
-/* -------------------------
-   START SHOW (WAKE SERVER)
-------------------------- */
-app.post('/startShow', (req, res) => {
-    for (const dept in cues) {
-        cues[dept] = 0
-        currentAction[dept] = "STANDBY"
-    }
+// Select department (Stream Deck)
+app.post("/selectDept", (req, res) => {
+  const { department } = req.body;
+  if (!state[department]) {
+    return res.status(400).json({ error: "Invalid department" });
+  }
+  selectedDept = department;
+  res.json({ status: "ok", selectedDept });
+});
 
-    console.log("SHOW STARTED / SERVER AWAKE")
+// GO / STANDBY / RESET
+app.post("/action", (req, res) => {
+  const { action } = req.body;
+  const dept = selectedDept;
 
-    res.send({
-        status: "ok",
-        message: "Show started, server awake"
-    })
-})
+  if (!state[dept]) {
+    return res.status(400).json({ error: "Invalid department" });
+  }
 
-/* -------------------------
-   ACTIONS (GO / STANDBY / RESET)
-------------------------- */
-app.post('/action', (req, res) => {
-    const { department, action } = req.body
+  if (action === "GO") {
+    state[dept].action = "GO";
+    state[dept].currentCue = state[dept].nextCue;
+    state[dept].nextCue++;
+  }
 
-    if (action === "RESET_ALL") {
-        for (const dept in cues) {
-            cues[dept] = 0
-            currentAction[dept] = "STANDBY"
-        }
+  if (action === "STANDBY") {
+    state[dept].action = "STANDBY";
+  }
 
-        return res.send({ status: "ok", message: "All cues reset" })
-    }
+  if (action === "RESET") {
+    state[dept].currentCue = 0;
+    state[dept].nextCue = 1;
+    state[dept].action = "STANDBY";
+  }
 
-    if (!department || !(department in cues)) {
-        return res.send({ status: "error", message: "Invalid department" })
-    }
+  res.json({ status: "ok" });
+});
 
-    if (action === "GO") {
-        currentAction[department] = "GO"
-        cues[department]++ // advance next cue immediately
-    }
+// Wake + reset all
+app.post("/startShow", (req, res) => {
+  for (const dept in state) {
+    state[dept].currentCue = 0;
+    state[dept].nextCue = 1;
+    state[dept].action = "STANDBY";
+  }
+  res.json({ status: "show started" });
+});
 
-    if (action === "STANDBY") {
-        currentAction[department] = "STANDBY"
-    }
+// Poll per department
+app.get("/poll/:dept", (req, res) => {
+  const dept = req.params.dept.toUpperCase();
+  if (!state[dept]) {
+    return res.status(400).json({ error: "Invalid department" });
+  }
 
-    res.send({
-        status: "ok",
-        department,
-        currentCue: cues[department] - 1,
-        nextCue: cues[department],
-        action: currentAction[department]
-    })
-})
+  const payload = { ...state[dept] };
+  clearAction(dept);
+  res.json(payload);
+});
 
-/* -------------------------
-   POLL
-------------------------- */
-app.get('/poll', (req, res) => {
-    const department = req.query.department
-
-    if (!department || !(department in cues)) {
-        return res.send({ status: "error", message: "Invalid department" })
-    }
-
-    res.send({
-        status: "ok",
-        department,
-        currentCue: cues[department] - 1,
-        nextCue: cues[department],
-        action: currentAction[department]
-    })
-})
-
-app.listen(port, () => {
-    console.log(`SM server running on port ${port}`)
-})
+// =====================
+app.listen(PORT, () => {
+  console.log(`SM Server running on port ${PORT}`);
+});
