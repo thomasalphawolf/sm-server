@@ -20,6 +20,15 @@ let currentAction = {
 app.post('/action', (req, res) => {
     const { department, action } = req.body;
 
+    // Reset All doesn't need a department
+    if (action === "RESET_ALL") {
+        for (const dept in cues) {
+            cues[dept] = 0;
+            currentAction[dept] = "STANDBY";
+        }
+        return res.send({ status: "ok", message: "All cues reset" });
+    }
+
     if (!department || !(department in cues)) {
         return res.send({ status: "error", message: "Invalid department" });
     }
@@ -27,18 +36,14 @@ app.post('/action', (req, res) => {
     switch(action) {
         case "GO":
             currentAction[department] = "GO";
+            cues[department]++; // Advance next cue immediately
             break;
+
         case "STANDBY":
             currentAction[department] = "STANDBY";
-            cues[department]++; // advance to next cue
+            // Current cue already advanced on GO, no change here
             break;
-        case "RESET_ALL":
-            // Reset all cues and actions
-            for (const dept in cues) {
-                cues[dept] = 0;
-                currentAction[dept] = "STANDBY";
-            }
-            break;
+
         default:
             return res.send({ status: "error", message: "Unknown action" });
     }
@@ -46,8 +51,8 @@ app.post('/action', (req, res) => {
     res.send({
         status: "ok",
         department,
-        currentCue: cues[department],
-        nextCue: cues[department] + 1,
+        currentCue: cues[department] - 1, // Show the cue you just went
+        nextCue: cues[department],        // Next cue
         action: currentAction[department]
     });
 });
@@ -62,8 +67,8 @@ app.get('/poll', (req, res) => {
     res.send({
         status: "ok",
         department,
-        currentCue: cues[department],
-        nextCue: cues[department] + 1,
+        currentCue: cues[department] - 1,
+        nextCue: cues[department],
         action: currentAction[department]
     });
 });
