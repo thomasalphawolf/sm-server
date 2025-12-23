@@ -8,89 +8,98 @@ app.use(express.json());
 // STATE
 // =====================
 const state = {
-  LX: {
-    currentCue: 0,
-    nextCue: 1,
-    action: "NONE"
-  },
-  AUTOMATION: {
-    currentCue: 0,
-    nextCue: 1,
-    action: "NONE"
-  }
+  LX: { currentCue: 0, nextCue: 1, action: "NONE" },
+  AUTOMATION: { currentCue: 0, nextCue: 1, action: "NONE" }
 };
-
-let selectedDept = "LX";
 
 // =====================
 // HELPERS
 // =====================
+
+// Clear the last action after polling (prevents repeated GO flashes)
 function clearAction(dept) {
-  state[dept].action = "NONE";
+  if (state[dept]) state[dept].action = "NONE";
+}
+
+// Validate department exists
+function isValidDept(dept) {
+  return dept && state[dept.toUpperCase()];
 }
 
 // =====================
 // ROUTES
 // =====================
 
-// Select department (Stream Deck)
+// Optional: select department for UI highlight (not needed for actual action)
 app.post("/selectDept", (req, res) => {
   const { department } = req.body;
-  if (!state[department]) {
+  if (!isValidDept(department)) {
     return res.status(400).json({ error: "Invalid department" });
   }
-  selectedDept = department;
-  res.json({ status: "ok", selectedDept });
+  res.json({ status: "ok", selectedDept: department.toUpperCase() });
 });
 
-// GO / STANDBY / RESET
+// Perform GO / STANDBY / RESET
 app.post("/action", (req, res) => {
-  const { action } = req.body;
-  const dept = selectedDept;
-
-  if (!state[dept]) {
+  const { department, action } = req.body;
+  if (!isValidDept(department)) {
     return res.status(400).json({ error: "Invalid department" });
   }
 
-  if (action === "GO") {
-    state[dept].action = "GO";
-    state[dept].currentCue = state[dept].nextCue;
-    state[dept].nextCue++;
+  const dept = department.toUpperCase();
+
+  switch (action.toUpperCase()) {
+    case "GO":
+      state[dept].action = "GO";
+      state[dept].currentCue = state[dept].nextCue;
+      state[dept].nextCue++;
+      break;
+    case "STANDBY":
+      state[dept].action = "STANDBY";
+      break;
+    case "RESET":
+      state[dept].currentCue = 0;
+      state[dept].nextCue = 1;
+      state[dept].action = "STANDBY";
+      break;
+    default:
+      return res.status(400).json({ error: "Invalid action" });
   }
 
-  if (action === "STANDBY") {
-    state[dept].action = "STANDBY";
-  }
-
-  if (action === "RESET") {
-    state[dept].currentCue = 0;
-    state[dept].nextCue = 1;
-    state[dept].action = "STANDBY";
-  }
-
-  res.json({ status: "ok" });
+  console.log(`[ACTION] ${action} -> ${dept}: Current Cue ${state[dept].currentCue}, Next Cue ${state[dept].nextCue}`);
+  res.json({ status: "ok", department: dept, currentCue: state[dept].currentCue, nextCue: state[dept].nextCue, action: state[dept].action });
 });
 
-// Wake + reset all
+// Start show / wake server / reset all cues
 app.post("/startShow", (req, res) => {
   for (const dept in state) {
     state[dept].currentCue = 0;
     state[dept].nextCue = 1;
     state[dept].action = "STANDBY";
   }
-  res.json({ status: "show started" });
+  console.log("[SHOW] Started / Reset all departments");
+  res.json({ status: "show started", state });
 });
 
-// Poll per department
+// Poll current state for a department
 app.get("/poll/:dept", (req, res) => {
-  const dept = req.params.dept.toUpperCase();
-  if (!state[dept]) {
+  const deptParam = req.params.dept;
+  if (!isValidDept(deptParam)) {
     return res.status(400).json({ error: "Invalid department" });
   }
 
+  const dept = deptParam.toUpperCase();
   const payload = { ...state[dept] };
+
+  // Clear action after sending to prevent repeated GO flashes
   clearAction(dept);
+
   res.json(payload);
+});
+
+// Health check
+app.get("/", (req, res) => {
+  res.send({ status: "SM Server Online" });
 });
 
 // =====================
