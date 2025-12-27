@@ -49,25 +49,37 @@ app.post("/action", (req, res) => {
   const dept = department.toUpperCase();
 
   switch (action.toUpperCase()) {
+    case "STANDBY":
+      state[dept].action = "STANDBY";
+      state[dept].nextCue++; 
+      break;
+
     case "GO":
       state[dept].action = "GO";
       state[dept].currentCue = state[dept].nextCue;
-      state[dept].nextCue++;
       break;
-    case "STANDBY":
-      state[dept].action = "STANDBY";
-      break;
+
     case "RESET":
       state[dept].currentCue = 0;
       state[dept].nextCue = 1;
       state[dept].action = "STANDBY";
       break;
+
     default:
       return res.status(400).json({ error: "Invalid action" });
   }
 
-  console.log(`[ACTION] ${action} -> ${dept}: Current Cue ${state[dept].currentCue}, Next Cue ${state[dept].nextCue}`);
-  res.json({ status: "ok", department: dept, currentCue: state[dept].currentCue, nextCue: state[dept].nextCue, action: state[dept].action });
+  console.log(
+    `[ACTION] ${action} -> ${dept} | Current: ${state[dept].currentCue}, Next: ${state[dept].nextCue}`
+  );
+
+  res.json({
+    status: "ok",
+    department: dept,
+    currentCue: state[dept].currentCue,
+    nextCue: state[dept].nextCue,
+    action: state[dept].action
+  });
 });
 
 // Start show / wake server / reset all cues
