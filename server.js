@@ -51,12 +51,13 @@ app.post("/action", (req, res) => {
   switch (action.toUpperCase()) {
     case "STANDBY":
       state[dept].action = "STANDBY";
-      state[dept].nextCue++; 
+      state[dept].currentCue = state[dept].nextCue;
       break;
 
     case "GO":
       state[dept].action = "GO";
-      state[dept].currentCue = state[dept].nextCue;
+      state[dept].nextCue++; 
+
       break;
 
     case "RESET":
