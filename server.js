@@ -42,28 +42,31 @@ app.post("/selectDept", (req, res) => {
 // Perform GO / STANDBY / RESET
 app.post("/action", (req, res) => {
   const { department, action } = req.body;
+
   if (!isValidDept(department)) {
     return res.status(400).json({ error: "Invalid department" });
   }
 
   const dept = department.toUpperCase();
+  const cue = state[dept];
 
   switch (action.toUpperCase()) {
-    case "STANDBY":
-      state[dept].action = "STANDBY";
-      state[dept].currentCue = state[dept].nextCue;
+    case "GO":
+      // Fire the current cue, do NOT advance numbers
+      cue.action = "GO";
       break;
 
-    case "GO":
-      state[dept].action = "GO";
-      state[dept].nextCue++; 
-
+    case "STANDBY":
+      // Advance to next cue on standby
+      cue.currentCue = cue.nextCue;
+      cue.nextCue++;
+      cue.action = "STANDBY";
       break;
 
     case "RESET":
-      state[dept].currentCue = 0;
-      state[dept].nextCue = 1;
-      state[dept].action = "STANDBY";
+      cue.currentCue = 0;
+      cue.nextCue = 1;
+      cue.action = "STANDBY";
       break;
 
     default:
@@ -71,28 +74,18 @@ app.post("/action", (req, res) => {
   }
 
   console.log(
-    `[ACTION] ${action} -> ${dept} | Current: ${state[dept].currentCue}, Next: ${state[dept].nextCue}`
+    `[ACTION] ${dept} ${action} | Current: ${cue.currentCue} Next: ${cue.nextCue}`
   );
 
   res.json({
     status: "ok",
     department: dept,
-    currentCue: state[dept].currentCue,
-    nextCue: state[dept].nextCue,
-    action: state[dept].action
+    currentCue: cue.currentCue,
+    nextCue: cue.nextCue,
+    action: cue.action
   });
 });
 
-// Start show / wake server / reset all cues
-app.post("/startShow", (req, res) => {
-  for (const dept in state) {
-    state[dept].currentCue = 0;
-    state[dept].nextCue = 1;
-    state[dept].action = "STANDBY";
-  }
-  console.log("[SHOW] Started / Reset all departments");
-  res.json({ status: "show started", state });
-});
 
 // Poll current state for a department
 app.get("/poll/:dept", (req, res) => {
